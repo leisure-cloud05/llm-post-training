@@ -1,0 +1,8 @@
+true/pred,angry,anxious,confused,frustrated,neutral,overwhelmed,__invalid__
+angry,1,0,0,17,0,0,0
+anxious,0,0,0,3,0,0,0
+confused,0,0,38,101,6,0,2
+frustrated,0,0,9,112,0,0,0
+neutral,0,0,60,60,78,0,0
+overwhelmed,0,0,9,3,1,0,0
+__invalid__,0,0,0,0,0,0,0

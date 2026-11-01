@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+
+# Environments
+.venv/
+venv/
+env/
+lora_env/
+
+# Models and training outputs
+models/
+adapters/
+adapters_best/
+adapters_balanced/
+adapters_balanced_best/
+checkpoints/
+*.safetensors
+*.gguf
+
+# Cache and secrets
+.cache/
+.env
+.env.*
+*.log
+
+# Downloaded and processed datasets
+data/*.jsonl
+data/*.parquet
+data_balanced/
+data/*.csv
+
+# Generated diagnostic metadata
+data/diagnostic_manifest.json
+
+# Per-example evaluation outputs
+results/*_predictions.jsonl
+results/error_cases.jsonl
+
+# Detailed evaluation outputs
+results/*_predictions*.jsonl
+results/error_cases.jsonl
+results/near_duplicate_audit.csv

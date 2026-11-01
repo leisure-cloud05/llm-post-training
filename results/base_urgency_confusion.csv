@@ -1,0 +1,6 @@
+true/pred,critical,high,low,medium,__invalid__
+critical,0,6,0,0,0
+high,0,41,0,1,0
+low,0,88,146,39,0
+medium,0,164,2,11,2
+__invalid__,0,0,0,0,0

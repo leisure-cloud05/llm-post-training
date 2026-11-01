@@ -1,0 +1,13 @@
+{
+  "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "adapter": null,
+  "samples": 500,
+  "json_validity": 0.996,
+  "label_compliance": 0.996,
+  "exact_match_accuracy": 0.202,
+  "field_accuracy": {
+    "category": 0.72,
+    "sentiment": 0.458,
+    "urgency": 0.396
+  }
+}

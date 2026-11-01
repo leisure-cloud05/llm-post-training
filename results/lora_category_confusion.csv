@@ -1,0 +1,10 @@
+true/pred,alerts,attribution,billing,connectors,dashboards,northstar,reports,users_workspace,__invalid__
+alerts,88,0,0,0,0,0,0,0,0
+attribution,0,47,0,0,0,0,1,0,0
+billing,0,0,42,1,0,0,2,0,0
+connectors,0,0,3,116,0,0,0,1,0
+dashboards,0,0,0,1,86,1,0,0,0
+northstar,0,0,0,0,0,17,0,0,0
+reports,0,0,0,0,0,0,51,0,0
+users_workspace,0,0,1,0,0,0,0,42,0
+__invalid__,0,0,0,0,0,0,0,0,0
