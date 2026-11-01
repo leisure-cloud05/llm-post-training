@@ -1,0 +1,14 @@
+{
+  "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "adapter": null,
+  "data_file": "/Users/leisurecloud/Documents/llm-instruction-finetuning/data/event_shift_test.jsonl",
+  "samples": 520,
+  "json_validity": 0.9519230769230769,
+  "label_compliance": 0.95,
+  "exact_match_accuracy": 0.2846153846153846,
+  "field_accuracy": {
+    "category": 0.8653846153846154,
+    "sentiment": 0.4,
+    "urgency": 0.4403846153846154
+  }
+}

@@ -19,6 +19,50 @@ LABELS = {
 }
 
 
+STRONG_PROMPT = """You are a customer support ticket classifier.
+
+Classify the ticket using exactly three attributes.
+
+CATEGORY:
+Choose the primary issue:
+- connectors: Data source connections, synchronization, or integration failures.
+- dashboards: Dashboard displays, charts, or incorrect dashboard metrics.
+- alerts: Alert rules, notifications, or triggering problems.
+- reports: Report creation, exporting, or scheduling.
+- attribution: Attribution models or channel credit.
+- billing: Subscription, payments, invoices, or plan changes.
+- users_workspace: User permissions, accounts, access, or workspace issues.
+- northstar: North Star metric configuration or calculation.
+
+SENTIMENT:
+- neutral: Factual or emotionally neutral language.
+- frustrated: Dissatisfaction, irritation, or repeated difficulties.
+- confused: Uncertainty, lack of understanding, or requests for clarification.
+- angry: Strong anger, accusations, or hostile complaints.
+- overwhelmed: Feeling unable to cope with multiple problems.
+- anxious: Worry, fear, or concern about possible consequences.
+
+URGENCY:
+Determine the severity of the underlying issue, not just the tone.
+- low: General feedback, minor inconveniences, or non-urgent questions.
+- medium: Problems affecting normal work without severe disruption.
+- high: Important issues causing significant disruption or requiring prompt action.
+- critical: Severe outages, major business-wide disruption, security incidents,
+  unauthorized access, cross-organization data exposure, or serious data
+  integrity failures affecting core operations.
+
+A ticket saying "urgent" or "ASAP" is not automatically critical.
+Distinguish high from critical using scope, impact, and security risk.
+
+OUTPUT RULES:
+Return only one valid JSON object with exactly these keys:
+category, sentiment, urgency.
+
+Use only the labels listed above.
+Do not include explanations, markdown, or additional fields.
+
+"""
+
 def parse_prediction(text):
     try:
         prediction = json.loads(text.strip())
@@ -36,6 +80,11 @@ def main():
 
     parser.add_argument("--adapter", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--prompt-mode",
+        choices=["original", "strong"],
+        default="original",
+    )
 
     # NEW: Select the evaluation dataset.
     parser.add_argument(
@@ -89,11 +138,36 @@ def main():
     exact_match = 0
     predictions = []
 
-    for index, record in enumerate(records, start=1):
+    for index, record in enumerate(records, start=1):        
         messages = record["messages"]
 
+        if args.prompt_mode == "strong":
+            original_text = messages[0]["content"]
+
+            # Extract the original ticket block.
+            import re
+
+            match = re.search(
+                r"\n\n(?=Subject: |Body: )",
+                original_text,
+            )
+
+            if match is None:
+                raise ValueError(
+                    f"Ticket block not found at record {index}"
+                )
+
+            ticket_text = original_text[match.end():]
+
+            input_messages = [{
+                "role": "user",
+                "content": STRONG_PROMPT + ticket_text,
+            }]
+        else:
+            input_messages = messages[:-1]
+
         prompt = tokenizer.apply_chat_template(
-            messages[:-1],
+            input_messages,
             tokenize=False,
             add_generation_prompt=True,
         )

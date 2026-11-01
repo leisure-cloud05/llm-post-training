@@ -1,0 +1,14 @@
+{
+  "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "adapter": null,
+  "data_file": "/Users/leisurecloud/Documents/llm-instruction-finetuning/data/test.jsonl",
+  "samples": 500,
+  "json_validity": 0.904,
+  "label_compliance": 0.904,
+  "exact_match_accuracy": 0.134,
+  "field_accuracy": {
+    "category": 0.766,
+    "sentiment": 0.396,
+    "urgency": 0.25
+  }
+}
