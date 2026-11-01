@@ -1,100 +1,131 @@
-# Label Schema: Chinese Customer Feedback Classification
+# Label Schema: Structured Support Ticket Classification
 
 ## 1. Task Definition
 
-Given a Chinese customer feedback message, produce a valid JSON object containing exactly three fields:
+This project investigates supervised instruction fine-tuning for structured classification of English customer support tickets.
 
-- `category`: Primary issue category
-- `sentiment`: Overall sentiment
-- `urgency`: Priority of the reported issue
+Given a ticket subject and body, the model generates a JSON object with exactly three fields:
 
-The model must use only the predefined labels and must not add explanations or extra fields.
+- `category`: Primary support topic
+- `sentiment`: Customer sentiment
+- `urgency`: Ticket priority
 
-## 2. Category Labels
+The model must predict labels from the ticket text without accessing ground-truth labels or unrelated metadata.
 
-| Label | Definition |
-|---|---|
-| 产品质量 | Product defects, damage, or functional failures |
-| 物流配送 | Shipping delays, delivery problems, or lost packages |
-| 售后服务 | Customer support, refunds, returns, or exchange requests |
-| 其他 | Feedback outside the categories above |
+## 2. Dataset
 
-For messages involving multiple issues, assign the category representing the primary complaint.
+**Name:** Polaris Support Tickets — Synthetic Dataset (v2)
 
-If the primary issue is ambiguous, apply the following tie-breaking order:
+**Source:** https://huggingface.co/datasets/VladislavMarinovich/polaris-support-tickets-v2
 
-产品质量 > 物流配送 > 售后服务 > 其他
+**Size:** 23,994 records
 
-## 3. Sentiment Labels
+**Language:** English
 
-| Label | Definition |
-|---|---|
-| 正面 | Clear satisfaction, praise, or positive experience |
-| 中性 | Factual statements without strong positive or negative sentiment |
-| 负面 | Complaints, disappointment, or dissatisfaction |
+**Type:** Synthetic customer support tickets for a fictional SaaS platform.
 
-## 4. Urgency Labels
+The source dataset contains a single original train split. This project will create its own training, validation, and test subsets.
 
-| Label | Definition |
-|---|---|
-| 高 | Safety risks, critical failures preventing normal use, or explicit requests for immediate action |
-| 中 | Problems requiring resolution without immediate risk or critical impact |
-| 低 | General inquiries, suggestions, praise, or minor inconvenience |
+## 3. Label Mapping
 
-Urgency must be determined from the reported impact, not sentiment alone.
+| Output field | Source column | Number of classes |
+|---|---|---|
+| `category` | `topic` | 8 |
+| `sentiment` | `sentiment` | 6 |
+| `urgency` | `priority` | 4 |
+
+The output field `urgency` is a project-specific name for the source dataset's `priority` attribute.
+
+**Priority labels:**
+
+- `low`
+- `medium`
+- `high`
+- `critical`
+
+The complete `topic` and `sentiment` label lists will be extracted programmatically from the downloaded dataset to avoid introducing unsupported labels.
+
+Original labels will be preserved without manually merging or renaming classes.
+
+## 4. Model Input
+
+The model receives only the ticket subject and body.
+
+Example input:
+
+**Subject:** Scheduled report never came
+
+**Body:** My scheduled report didn't arrive this morning. We need it for our daily performance review.
+
+The source fields `topic`, `sentiment`, and `priority` must not appear in the input prompt.
 
 ## 5. Output Format
 
-Return only a valid JSON object with exactly three keys:
+The model must return a valid JSON object containing exactly:
 
-```json
-{
-  "category": "产品质量",
-  "sentiment": "负面",
-  "urgency": "高"
-}
-```
+- `category`
+- `sentiment`
+- `urgency`
 
-No Markdown fences, additional keys, or explanations are allowed in model outputs.
+Example output format:
 
-## 6. Example
+`{"category": "<topic label>", "sentiment": "<sentiment label>", "urgency": "medium"}`
 
-**Input:**
+All predictions must belong to the allowed source label sets.
 
-耳机刚买两天就坏了，客服一直不回复。
+No additional text, explanations, or Markdown formatting should be generated.
 
-**Expected output:**
+## 6. Dataset Preparation
 
-```json
-{
-  "category": "产品质量",
-  "sentiment": "负面",
-  "urgency": "高"
-}
-```
+The initial experiment targets approximately:
 
-## 7. Dataset Split Rules
+| Split | Target size |
+|---|---:|
+| Training | 4,000 |
+| Validation | 500 |
+| Test | 500 |
 
-- Training set: Used to update model parameters.
-- Validation set: Used for development and model selection.
-- Test set: Reserved for final evaluation.
-- Identical or near-duplicate messages must not appear across different splits.
-- All splits must follow the same labeling rules.
-- Dataset generation methods, limitations, and split sizes must be documented.
+These are planned sample counts, not completed dataset statistics.
 
-## 8. Evaluation
+Preparation requirements:
 
-Primary metrics:
+- Remove missing or unusable records.
+- Validate source labels.
+- Check exact and near-duplicate texts.
+- Inspect class distributions.
+- Identify event-driven tickets using `event_id` and related metadata.
+- Reduce leakage from related incidents when constructing dataset splits.
+- Use a fixed random seed and record final sample counts.
 
-- Exact-match accuracy across all three fields
-- Per-field classification accuracy
+Test samples must remain excluded from training and model selection.
+
+## 7. Evaluation
+
+Evaluate the base model and fine-tuned model using the same held-out test set, prompt template, and decoding settings.
+
+Metrics:
+
 - JSON validity rate
 - Label-set compliance rate
+- Category accuracy
+- Sentiment accuracy
+- Urgency accuracy
+- Three-field exact-match accuracy
 
-The base model and fine-tuned model must be evaluated using the same held-out test set, prompt format, and decoding configuration.
+Report invalid outputs and representative classification errors.
 
-## 9. Scope and Limitations
+## 8. Dataset Limitations
 
-This is a task-specific experimental labeling scheme, not a universal industry standard.
+- The dataset is synthetic and does not contain real customer interactions.
+- Labels are generated from predefined scenarios and are not independently human-verified.
+- Some records share incident or scenario context.
+- Evaluation performance may be optimistic relative to real-world customer support.
+- This experiment demonstrates a reproducible fine-tuning and evaluation workflow, not production-level generalization.
 
-If synthetic data is used, its origin must be disclosed. Performance on synthetic test data does not establish real-world generalization.
+## 9. Dataset Attribution
+
+Marinovich, V. (2026). *Polaris Support Tickets — Synthetic Dataset (v2).*
+
+Dataset: https://huggingface.co/datasets/VladislavMarinovich/polaris-support-tickets-v2
+
+License: CC BY-SA 4.0, as indicated on the Hugging Face dataset page.
