@@ -4,9 +4,9 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "data"
-TARGET = ROOT / "data_balanced"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "data/sft/original"
+TARGET = ROOT / "data/sft/balanced"
 
 SEED = 42
 TOTAL = 4000

@@ -89,7 +89,7 @@ def main():
     # NEW: Select the evaluation dataset.
     parser.add_argument(
         "--data-file",
-        default="data/test.jsonl",
+        default="data/sft/original/test.jsonl",
     )
 
     # NEW: Give this experiment a separate output name.
@@ -100,13 +100,13 @@ def main():
 
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
 
     test_path = Path(args.data_file)
     if not test_path.is_absolute():
         test_path = root / test_path
 
-    results_dir = root / "results"
+    results_dir = root / "results/sft"
     results_dir.mkdir(exist_ok=True)
 
     name = args.output_name or (

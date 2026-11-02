@@ -1,0 +1,31 @@
+{
+  "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "test_sha256": "b7edaa6b1889c13324d71a22cea2422b33548de3d8cd2bba64f89ae2d9031300",
+  "sft_sha256": "ab135950717e488396597eaf3e4abac8bcf8991e76575123af0c31bd01a44a8c",
+  "dpo_sha256": "6306fa01ec188ccbf92c0b60415c21af356ebcf303f5626b66285cbad293b520",
+  "seed": 2026,
+  "indices": [
+    70,
+    189,
+    304,
+    311,
+    395,
+    60,
+    134,
+    366,
+    379,
+    339,
+    252,
+    349,
+    335,
+    296,
+    357,
+    263,
+    143,
+    1,
+    374,
+    46
+  ],
+  "max_new_tokens": 256,
+  "decoding": "greedy"
+}

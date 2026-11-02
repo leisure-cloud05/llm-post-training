@@ -1,0 +1,19 @@
+{
+  "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+  "sft_adapter_sha256": "ab135950717e488396597eaf3e4abac8bcf8991e76575123af0c31bd01a44a8c",
+  "train_sha256": "305d92a97324f530053871c4d61b41f3e579fe4ea96933faac5081d338a004b9",
+  "valid_sha256": "8c016ce78833c6761d149713b2202f02d3ed680a6bff5f6841376802ef8c673c",
+  "seed": 42,
+  "beta": 0.1,
+  "learning_rate": 1e-06,
+  "max_tokens": 1024,
+  "eval_every": 100,
+  "step": 1000,
+  "metrics": {
+    "val_loss": 0.46638579281952125,
+    "reward_accuracy": 0.7975,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.9716585917472835,
+    "samples": 400
+  }
+}

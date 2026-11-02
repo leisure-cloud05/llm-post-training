@@ -5,8 +5,8 @@ from pathlib import Path
 
 from datasets import load_dataset
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
+ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = ROOT / "data/sft/original"
 DATASET = "VladislavMarinovich/polaris-support-tickets-v2"
 
 

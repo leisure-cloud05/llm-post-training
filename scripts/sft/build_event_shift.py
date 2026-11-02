@@ -6,8 +6,8 @@ from pathlib import Path
 
 from datasets import load_dataset
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
+ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "data/sft/original"
 SOURCE = "VladislavMarinovich/polaris-support-tickets-v2"
 
 SEED = 42

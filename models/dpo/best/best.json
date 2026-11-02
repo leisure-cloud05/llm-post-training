@@ -1,0 +1,8 @@
+{
+  "step": 1000,
+  "val_loss": 0.46638579281952125,
+  "reward_accuracy": 0.7975,
+  "tie_rate": 0.0,
+  "mean_reward_margin": 0.9716585917472835,
+  "samples": 400
+}

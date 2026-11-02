@@ -1,0 +1,5 @@
+mlx==0.32.4
+mlx-lm==0.32.2
+datasets==5.1.0
+numpy==2.4.6
+scikit-learn==1.9.1

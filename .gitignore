@@ -4,42 +4,60 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
-# Environments
+# Virtual environments
 .venv/
 venv/
 env/
 lora_env/
 
-# Models and training outputs
-models/
-adapters/
-adapters_best/
-adapters_balanced/
-adapters_balanced_best/
-checkpoints/
+# Local secrets and caches
+.env
+.env.*
+.cache/
+*.log
+
+# Model weights and checkpoints
+/archive/
+/checkpoints/
+/adapters*/
 *.safetensors
 *.gguf
 
-# Cache and secrets
-.cache/
-.env
-.env.*
-*.log
+# Local datasets and generated evaluations
+/data/
+/data_balanced
+/data_dpo
+/data_dpo_sft
 
-# Downloaded and processed datasets
-data/*.jsonl
-data/*.parquet
-data_balanced/
-data/*.csv
+# Large per-example evaluation outputs
+/results/**/*predictions*.jsonl
+/results/**/error_cases.jsonl
 
-# Generated diagnostic metadata
-data/diagnostic_manifest.json
+# Optional local backups
+*.bak
 
-# Per-example evaluation outputs
-results/*_predictions.jsonl
-results/error_cases.jsonl
+# Local training history and caches
+/archive/
+/cache/
+/checkpoints/
 
-# Detailed evaluation outputs
-results/*_predictions*.jsonl
-results/error_cases.jsonl
-results/near_duplicate_audit.csv
+# Local datasets (pending redistribution review)
+/data/
+/data_balanced
+/data_dpo
+/data_dpo_sft
+
+# Publish only selected final adapter weights
+!models/sft/original_best/adapters.safetensors
+!models/sft/balanced_best/adapters.safetensors
+!models/dpo_sft/best/adapters.safetensors
+!models/dpo/best/adapters.safetensors
+
+# DPO per-example evaluation and generation records
+/results/dpo/eval_test_dpo/batch_*.jsonl
+/results/dpo/generation_comparison/*.jsonl
+/results/dpo/generation_comparison_512/dpo_*.json
+/results/dpo/generation_comparison_512/sft_*.json
+
+# Detailed near-duplicate sample audit
+/results/sft/near_duplicate_audit.csv

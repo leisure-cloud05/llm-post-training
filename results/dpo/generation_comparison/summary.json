@@ -1,0 +1,9 @@
+{
+  "samples": 20,
+  "sft_mean_response_tokens": 176.35,
+  "dpo_mean_response_tokens": 205.75,
+  "sft_max_token_count": 256,
+  "dpo_max_token_count": 256,
+  "sft_hit_token_limit": 9,
+  "dpo_hit_token_limit": 9
+}

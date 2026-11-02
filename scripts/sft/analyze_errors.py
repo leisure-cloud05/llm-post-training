@@ -5,8 +5,8 @@ from pathlib import Path
 
 from sklearn.metrics import classification_report, confusion_matrix
 
-ROOT = Path(__file__).resolve().parents[1]
-RESULTS = ROOT / "results"
+ROOT = Path(__file__).resolve().parents[2]
+RESULTS = ROOT / "results/sft/sft"
 
 LABELS = {
     "category": [

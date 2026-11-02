@@ -1,358 +1,277 @@
-# LLM Instruction Fine-Tuning
+# LLM Post-Training: LoRA SFT and Custom DPO on Apple Silicon
 
-**Parameter-Efficient Fine-Tuning, Class-Aware Optimization, and Generalization Analysis of Qwen2.5 on Apple Silicon**
+A hands-on LLM post-training project built with **MLX** on Apple Silicon. It combines supervised fine-tuning (SFT) for structured customer-support classification with a separate instruction-following SFT → Direct Preference Optimization (DPO) pipeline. The emphasis is on **implementing and evaluating training methods**, not just calling a high-level trainer.
 
-## Overview
+## Highlights
 
-This project investigates task-specific supervised fine-tuning (SFT) of a 4-bit quantized Qwen2.5-1.5B-Instruct model using LoRA and MLX-LM.
+- **LoRA SFT for structured prediction:** compared the base model, standard fine-tuning, and class-balanced fine-tuning on customer-support classification.
+- **Custom DPO implementation:** implemented the pairwise preference objective using policy and frozen-reference response log probabilities, without a third-party DPO trainer.
+- **Memory-aware experimentation:** built batched reference-log-probability caching and checkpointed workflows for an Apple Silicon laptop.
+- **Two evaluation perspectives:** reported held-out preference metrics and inspected generated responses qualitatively, including cases where improvements in the DPO objective did **not** translate into better answers.
 
-The task is to classify English customer support tickets and generate structured JSON predictions for three attributes:
+## Results at a Glance
 
-- **Category:** Primary support topic
-- **Sentiment:** Customer sentiment
-- **Urgency:** Ticket priority
+### Structured customer-support SFT
 
-Example output:
+| Model / setup | Exact-match accuracy |
+|---|---:|
+| Base model | 20.2% |
+| Standard LoRA SFT | 76.2% |
+| Class-balanced LoRA SFT | **79.8%** |
 
-```json
-{
-  "category": "billing",
-  "sentiment": "frustrated",
-  "urgency": "high"
-}
+The percentages above are from the project's recorded classification experiments. See [`docs/experiment_report.md`](docs/experiment_report.md) and the detailed metrics in [`results/sft/`](results/sft/).
+
+### Instruction SFT → DPO
+
+| Metric | Result |
+|---|---:|
+| Held-out preference pairs | 400 |
+| DPO test loss | **0.4260** |
+| Reward accuracy | **81.5%** |
+| Mean reward margin | **+1.0806** |
+| Selected DPO checkpoint | Step 1,000 |
+| DPO temperature parameter β | 0.1 |
+
+The training data comprised **4,000** preference pairs, with **400** validation and **400** test pairs. The preference dataset was prepared from `argilla/ultrafeedback-binarized-preferences-cleaned`. The policy initialization was a separately trained instruction-SFT LoRA adapter, rather than the customer-support classification adapter.
+
+**Important interpretation:** Reward accuracy measures whether the learned policy gives a larger *relative* preference margin to chosen than rejected responses under the DPO formulation. It is **not** a measure of factual correctness or a human win rate. Qualitative generation comparisons found some improvements, but also verbosity, truncation at generation limits, and failures to follow instructions. See [`docs/dpo_experiment_report.md`](docs/dpo_experiment_report.md) for the full discussion.
+
+## Datasets
+
+The two training tracks use **different datasets and objectives**. The processed datasets are kept locally under `data/` and are not included in this repository.
+
+| Stage | Source | Experimental splits | Purpose |
+|---|---|---|---|
+| Customer-support classification SFT | [Polaris Support Tickets v2](https://huggingface.co/datasets/VladislavMarinovich/polaris-support-tickets-v2) (synthetic SaaS support tickets) | 4,000 train / 500 validation / 500 standard test | Predict `category`, `sentiment`, and `urgency` as a strict JSON object from ticket `subject` and `body` |
+| Instruction SFT for DPO initialization | Chosen responses from the [Argilla UltraFeedback preference data](https://huggingface.co/datasets/argilla/ultrafeedback-binarized-preferences-cleaned) | 4,000 train / 400 validation | Train a separate general instruction-following reference/initial policy |
+| DPO preference training and evaluation | [Argilla UltraFeedback binarized preferences](https://huggingface.co/datasets/argilla/ultrafeedback-binarized-preferences-cleaned) | 4,000 train / 400 validation / 400 held-out test preference pairs | Optimize and evaluate relative preference for chosen versus rejected responses |
+
+For classification, the original experiment excluded 6,000 event-linked records before selecting 5,000 ordinary tickets. Additional high/critical diagnostic splits (50 examples each) and an event-associated test set (520 examples) were used for targeted evaluation. The **class-balanced** SFT variant resampled the original training split to increase representation of `critical` tickets; it did not introduce an independent dataset.
+
+For DPO, preparation filtered preference pairs by rating gap and sequence length, deduplicated normalized prompts, and created prompt-disjoint splits. The instruction-SFT track used the chosen answers from the training and validation preference splits; the held-out DPO test pairs were not used for training or checkpoint selection.
+
+The local preparation scripts are in [`scripts/sft/`](scripts/sft/) and [`scripts/dpo/`](scripts/dpo/). Recreating a split from an upstream dataset does **not** automatically guarantee byte-identical data to the recorded experiments; use the saved metrics, reports, manifests, and hashes to assess comparability. See the [SFT report](docs/experiment_report.md) and [DPO report](docs/dpo_experiment_report.md) for dataset selection and evaluation details.
+
+## Model and Training Approach
+
+**Base model:** [`mlx-community/Qwen2.5-1.5B-Instruct-4bit`](https://huggingface.co/mlx-community/Qwen2.5-1.5B-Instruct-4bit). Training and evaluation use the MLX ecosystem on Apple Silicon.
+
+### Track A — Structured-classification SFT
+
+1. Prepare structured customer-support examples and label schema.
+2. Evaluate the unmodified instruction model as a baseline.
+3. Train and evaluate a LoRA adapter.
+4. Prepare a class-balanced training variant and compare results.
+5. Analyze confusion matrices, diagnostic splits, and distribution shifts.
+
+Label definitions: [`docs/label_schema.md`](docs/label_schema.md).
+
+### Track B — Instruction SFT and DPO
+
+1. Prepare disjoint preference training, validation, and test splits.
+2. Fine-tune a separate instruction-SFT policy on the chosen responses.
+3. Cache frozen reference-policy response log probabilities in batches.
+4. Train a LoRA policy using the DPO objective:
+
+   \[
+   \mathcal{L}_{\mathrm{DPO}} =
+   -\log \sigma\left(\beta\left[
+   \log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}
+   -\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}
+   \right]\right).
+   \]
+
+5. Select a checkpoint using validation measurements; evaluate once on the held-out test split.
+6. Compare SFT and DPO generations at token limits of 256 and 512, with qualitative error analysis.
+
+The custom implementation and helper routines are in [`scripts/dpo/`](scripts/dpo/). Frozen-reference caching reduces repeated reference-model computation, while smaller subprocess batches help bound memory use.
+
+## Repository Layout
+
+```text
+.
+├── requirements.txt          # Pinned direct Python dependencies
+├── scripts/
+│   ├── sft/                  # Data preparation, classification evaluation, error analysis
+│   └── dpo/                  # Preference preparation, reference caching, DPO training/evaluation
+├── data/                     # Local datasets; not committed
+│   ├── sft/{original,balanced}/
+│   ├── dpo_sft/
+│   └── dpo/
+├── models/                   # Four selected LoRA adapters and their configurations
+│   ├── sft/{original_best,balanced_best}/
+│   ├── dpo_sft/best/
+│   └── dpo/best/
+├── results/
+│   ├── sft/                  # Classification metrics and error analyses
+│   └── dpo/                  # DPO metrics and comparison summaries
+├── docs/                     # Experiment reports and label schema
+├── cache/                    # Local reference-log-probability cache; not committed
+├── checkpoints/              # Optional new training runs; not committed
+└── archive/                  # Local training checkpoints; not committed
 ```
 
-Beyond basic fine-tuning, the project investigates class imbalance, minority-class recognition, prompt-based baselines, and performance under event-associated distribution shift.
+`archive/` preserves earlier checkpoints and optimizer states locally but is excluded from the published Git repository. The four selected adapters under `models/` are the release-facing weights.
 
-### Research Questions
-
-1. How much does task-specific SFT improve structured classification compared with an instruction-following base model?
-2. Can class-aware resampling improve critical-priority recognition without sacrificing performance on other classes?
-3. Can a stronger zero-shot prompt achieve similar gains without parameter updates?
-4. How do fine-tuned models behave under event-associated distribution shift?
-
-See [Experiment Report](docs/experiment_report.md) for the complete experimental methodology, results, and limitations.
-
-## Experimental Setup
-
-| Component | Configuration |
-|---|---|
-| Base model | Qwen2.5-1.5B-Instruct (4-bit) |
-| Model repository | `mlx-community/Qwen2.5-1.5B-Instruct-4bit` |
-| Framework | MLX-LM |
-| Fine-tuning | Response-only SFT with LoRA on a quantized model |
-| Hardware | Apple Silicon MacBook Air, 24GB unified memory |
-| Dataset | Polaris Support Tickets v2 |
-| Language | English |
-| Output format | Three-field JSON |
-| LoRA rank | 8 |
-| LoRA layers | 16 |
-| Trainable parameters | 5.276M (0.342%) |
-| Learning rate | 1e-5 |
-| Batch size | 2 |
-| Training iterations | 500 |
-| Checkpoint selection | Minimum validation loss |
-
-Both SFT experiments selected the checkpoint at iteration 400 using validation loss.
-
-## Dataset
-
-**Source:** [Polaris Support Tickets v2](https://huggingface.co/datasets/VladislavMarinovich/polaris-support-tickets-v2)
-
-The dataset contains 23,994 synthetic tickets from a fictional SaaS support platform.
-
-The task uses `subject` and `body` as inputs, with the following target mappings:
-
-| Source field | Prediction field |
-|---|---|
-| `topic` | `category` |
-| `sentiment` | `sentiment` |
-| `priority` | `urgency` |
-
-### Data Splits
-
-Event-linked tickets were excluded from the initial training and standard evaluation pipeline.
-
-| Split | Samples |
-|---|---:|
-| Train | 4,000 |
-| Validation | 500 |
-| Standard Test | 500 |
-| Diagnostic Dev | 50 |
-| Diagnostic Test | 50 |
-| Event-shift Test | 520 |
-
-The diagnostic sets contain 25 High and 25 Critical tickets each. The event-shift set contains 40 tickets from each of 13 event groups.
-
-Data preparation includes exact duplicate checking and heuristic character-level TF-IDF similarity screening. These checks do not guarantee the absence of semantic or template-level overlap.
-
-See [Label Schema](docs/label_schema.md) for the target labels.
-
-## Methods
-
-### 1. Base Model and Strong Prompt
-
-Two zero-shot baselines were evaluated without parameter updates:
-
-- **Base:** Original classification prompt specifying the allowed labels and output format.
-- **Strong Prompt:** Expanded label descriptions, severity criteria, and JSON output instructions.
-
-The Strong Prompt experiment also distinguishes strictly valid JSON from JSON that can be recovered by removing Markdown code fences.
-
-### 2. Original SFT with LoRA
-
-The quantized Qwen model was fine-tuned on 4,000 support tickets using supervised instruction-response examples.
-
-Prompt tokens were excluded from the supervised loss using response-only loss masking.
-
-The resulting model substantially improved structured classification accuracy compared with the untuned instruction model.
-
-### 3. Class-Aware SFT
-
-Error analysis revealed that the original SFT model frequently confused Critical with High priority.
-
-To investigate this issue, a second training run increased the Critical exposure ratio.
-
-| Training property | Original SFT | Class-aware SFT |
-|---|---:|---:|
-| Training records | 4,000 | 4,000 |
-| Critical occurrences | 49 | 400 |
-| Critical ratio | 1.23% | 10.0% |
-| Unique training examples | 4,000 | 3,649 |
-| Unique Critical examples | 49 | 49 |
-
-Critical examples were oversampled with replacement, while other classes were subsampled without replacement.
-
-Both models used the same base model, principal hyperparameters, and checkpoint selection rule.
-
-This intervention changes both minority-class exposure and non-critical sample diversity, which limits causal attribution to the sampling ratio alone.
-
-### 4. Error and Generalization Analysis
-
-The evaluation pipeline examines:
-
-- Structured output validity and label compliance
-- Per-field accuracy and three-field exact match
-- Per-class precision, recall, F1, and Macro-F1
-- Confusion matrices and error transitions
-- High/Critical diagnostic classification
-- Performance under event-associated distribution shift
-- Event-level performance differences across 13 event groups
-
-## Results
-
-### Standard Test — 500 Samples
-
-| Metric | Base | Strong Prompt | Original QLoRA | Class-aware QLoRA |
-|---|---:|---:|---:|---:|
-| Strict JSON validity | 99.6% | 90.4% | 100.0% | 100.0% |
-| Exact match | 20.2% | 13.4% | 76.2% | **79.8%** |
-| Category accuracy | 72.0% | 76.6% | 97.8% | **99.0%** |
-| Sentiment accuracy | 45.8% | 39.6% | 86.0% | **86.8%** |
-| Urgency accuracy | 39.6% | 25.0% | 90.2% | **92.8%** |
-
-The Strong Prompt achieved 100% extractable JSON validity and 14.2% extracted exact match, but did not outperform the original prompt on overall exact-match accuracy.
-
-The fine-tuned models substantially outperformed both zero-shot prompting baselines in this evaluation.
-
-### Minority-Class Performance — Standard Test
-
-| Metric | Original QLoRA | Class-aware QLoRA |
-|---|---:|---:|
-| Urgency Macro-F1 | 0.635 | **0.838** |
-| Critical recall | 0.0% (0/6) | **83.3% (5/6)** |
-| Critical precision | 0.0% | 62.5% |
-| High recall | 78.6% | 61.9% |
-| Medium recall | 83.2% | 100.0% |
-| Low recall | 98.5% | 93.0% |
-
-The standard test set contains only six Critical examples, so its minority-class results should be interpreted cautiously.
-
-### High/Critical Diagnostic Test — 50 Samples
-
-| Metric | Strong Prompt | Original QLoRA | Class-aware QLoRA |
-|---|---:|---:|---:|
-| Exact match | 16.0% | 28.0% | **54.0%** |
-| Urgency accuracy | 52.0% | 48.0% | **70.0%** |
-| Critical recall | 4.0% | 4.0% | **88.0%** |
-| High recall | 100.0% | 92.0% | 52.0% |
-| High/Critical Macro-F1 | 0.376 | 0.358 | **0.740** |
-
-Class-aware SFT improved Critical recognition from 1/25 to 22/25 compared with original SFT, while reducing High recall.
-
-The diagnostic set uses a balanced High/Critical distribution and is not representative of ordinary ticket frequencies.
-
-### Event-Shift Test — 520 Samples
-
-Event-linked records were excluded from initial SFT training and evaluated separately using 40 selected tickets from each of 13 event groups.
-
-| Metric | Base | Strong Prompt | Original QLoRA | Class-aware QLoRA |
-|---|---:|---:|---:|---:|
-| Exact match | 26.9% | 28.5% | 56.7% | **59.8%** |
-| Category accuracy | 75.8% | 86.5% | 95.2% | **99.0%** |
-| Sentiment accuracy | 44.8% | 40.0% | 72.9% | **78.3%** |
-| Urgency accuracy | 49.8% | 44.0% | **80.8%** | 75.8% |
-| Urgency Macro-F1 | 0.305 | 0.290 | 0.649 | **0.736** |
-| Critical recall | 0.0% | 0.0% | 1.4% | **88.7%** |
-| High recall | 98.8% | 100.0% | **98.3%** | 46.2% |
-
-**Key finding:** Class-aware resampling consistently improved Critical recall across the evaluated datasets, but reduced High recall. Under event-associated distribution shift, Urgency Macro-F1 increased while overall Urgency Accuracy decreased.
-
-This illustrates an important trade-off between minority-class sensitivity and majority-class performance.
-
-### Event-Level Analysis
-
-The effect of class-aware training varied across event types.
-
-- **Connector launches:** Original QLoRA generally retained higher urgency accuracy.
-- **Dashboard outages:** Class-aware QLoRA showed better average urgency accuracy.
-- **Connector synchronization outages:** Class-aware QLoRA exhibited substantial urgency-accuracy declines in several event groups.
-
-For example, `outage_dashboards_2026q1` improved from 52.5% to 80.0% urgency accuracy, whereas `outage_hubspot_sync_2024q4` decreased from 97.5% to 60.0%.
-
-These are exploratory subgroup findings based on 40 selected tickets per event, not evidence of a general causal relationship between event type and model behavior.
-
-## Reproduction
+## Getting Started
 
 ### Environment
 
-The experiments were conducted on Apple Silicon using Python 3.11 and MLX-LM.
+- Apple Silicon Mac with a working Python environment and MLX support.
+- Python 3.11.18 was used for the experiments.
+- Core dependencies include `mlx`, `mlx-lm`, `datasets`, `numpy`, and `scikit-learn` (plus other imports required by individual scripts).
+- The base model is fetched through the Hugging Face / MLX ecosystem when needed.
 
-Install the required packages in a compatible Python environment:
+Install the declared project dependencies in a fresh Python 3.11 environment on an Apple Silicon Mac:
 
 ```bash
-pip install "mlx-lm[train]" datasets scikit-learn numpy pandas
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### Data Preparation
+The `requirements.txt` pins the direct dependencies used in the local experiment environment (`mlx==0.32.4`, `mlx-lm==0.32.2`, `datasets==5.1.0`, `numpy==2.4.6`, and `scikit-learn==1.9.1`). These pins do not lock all transitive dependencies, and a fresh-environment installation and end-to-end reproduction have not yet been verified.
+
+### Lightweight repository checks
+
+From the project root, check Python syntax and the release-facing model artifacts without triggering training:
 
 ```bash
-python scripts/inspect_data.py
-python scripts/prepare_data.py
+python -m compileall -q scripts/sft scripts/dpo
+python - <<'PYCODE'
+from pathlib import Path
+adapters = [
+    'models/sft/original_best',
+    'models/sft/balanced_best',
+    'models/dpo_sft/best',
+    'models/dpo/best',
+]
+for folder in adapters:
+    for filename in ('adapters.safetensors', 'adapter_config.json'):
+        assert (Path(folder) / filename).is_file(), f'Missing: {folder}/{filename}'
+print('PASS: syntax and four adapter artifact paths')
+PYCODE
 ```
 
-The exact training data preparation, label schema, and audit procedures are described in the experiment report.
+These are **static checks**. Separately, all four released adapters were successfully loaded and used to generate short responses on the original Apple Silicon development machine after directory restructuring. That smoke test does not establish clean-clone reproducibility or reproduce evaluation metrics.
 
-### Original LoRA Training
+### Load a published LoRA adapter
+
+With the core MLX dependencies installed and access to the upstream base model, the DPO adapter can be loaded with:
+
+```python
+from mlx_lm import load
+
+model, tokenizer = load(
+    "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+    adapter_path="models/dpo/best",
+)
+```
+
+The same API can be used with `models/dpo_sft/best`, `models/sft/original_best`, or `models/sft/balanced_best`. All four adapters passed sequential loading and short-generation smoke tests in the development environment; these checks have **not** been repeated on a clean clone.
+
+### Reproducing specific stages
+
+Run commands from the **repository root** on Apple Silicon. Commands that process or train on data require datasets that are **not included in this Git repository**. The following are based on recorded experiment parameters and current CLI interfaces; they are **not** a verified clean-clone, end-to-end reproduction.
+
+**Customer-support SFT — prepare data and evaluate a published adapter**
 
 ```bash
-mlx_lm.lora \
+python scripts/sft/prepare_data.py
+python scripts/sft/prepare_balanced_data.py
+
+python scripts/sft/evaluate.py \
+  --adapter models/sft/original_best \
+  --data-file data/sft/original/test.jsonl \
+  --output-name original_lora_recheck
+
+python scripts/sft/evaluate.py \
+  --adapter models/sft/balanced_best \
+  --data-file data/sft/original/test.jsonl \
+  --output-name balanced_lora_recheck
+```
+
+The data-preparation commands may download or reconstruct local samples and should **not** be used to assume that regenerated splits are identical to the recorded experiments without verifying source selection, seeds, and manifests. The evaluation script should write to `results/sft/` after the repository's output-path fix; the commands above are intended for a separate recheck, not to reproduce metrics automatically. Use `--prompt-mode strong` when evaluating the strong-prompt variant.
+
+**Recorded customer-support LoRA training settings**
+
+The SFT experiment report records a 4-bit MLX base model, LoRA rank 8, 16 adapted layers, batch size 2, learning rate `1e-5`, response-only masking, 500 training iterations, and selection of the iteration-400 checkpoint. The original log's command targets the old directory layout; the following *adapted command* uses the new directories, but has not been rerun after restructuring:
+
+```bash
+python -m mlx_lm.lora \
   --model mlx-community/Qwen2.5-1.5B-Instruct-4bit \
-  --train \
-  --data data \
-  --mask-prompt \
-  --batch-size 2 \
-  --num-layers 16 \
-  --learning-rate 1e-5 \
-  --iters 500 \
-  --steps-per-report 10 \
-  --steps-per-eval 100 \
-  --save-every 100 \
-  --adapter-path adapters \
-  --seed 0
+  --train --data data/sft/original --mask-prompt \
+  --batch-size 2 --num-layers 16 \
+  --learning-rate 1e-5 --iters 500 \
+  --adapter-path checkpoints/sft_original
 ```
 
-### Class-Aware Training
+The class-aware experiment used the same primary settings with `--data data/sft/balanced`, a separate adapter destination, and `--seed 0`. **Do not overwrite the published best adapters**: checkpoint selection and copying the best iteration are separate steps. The exact installed MLX-LM CLI option compatibility should be confirmed before retraining.
+
+**DPO preference split preparation and reference caching**
+
+The *recorded* split sizes were 4,000 training / 400 validation / 400 test pairs. The preparation CLI exposes these arguments:
 
 ```bash
-python scripts/prepare_balanced_data.py
+python scripts/dpo/prepare_dpo_data.py \
+  --output-dir data/dpo \
+  --train 4000 --valid 400 --test 400 \
+  --max-tokens 1024 --seed 42
+
+python scripts/dpo/run_reference_batches.py --split train
+python scripts/dpo/run_reference_batches.py --split valid
 ```
+
+Preparation can require downloading the upstream preference dataset; regenerating it must be checked against the recorded `manifest.json` and hash files. Reference caching requires a locally available instruction-SFT adapter at `models/dpo_sft/best`. Its cache is written under `cache/dpo/ref_cache/` and is computed in batches of 20. Test-cache creation uses the separate `scripts/dpo/cache_dpo_test.py` workflow (not `run_reference_batches.py`, which accepts only `train` or `valid`).
+
+**Custom DPO training**
 
 ```bash
-mlx_lm.lora \
-  --model mlx-community/Qwen2.5-1.5B-Instruct-4bit \
-  --train \
-  --data data_balanced \
-  --mask-prompt \
-  --batch-size 2 \
-  --num-layers 16 \
-  --learning-rate 1e-5 \
-  --iters 500 \
-  --steps-per-report 10 \
-  --steps-per-eval 100 \
-  --save-every 100 \
-  --adapter-path adapters_balanced \
-  --seed 0
+python scripts/dpo/train_dpo.py \
+  --steps 1000 \
+  --output-dir checkpoints/dpo
 ```
 
-Both experiments selected their iteration-400 adapters according to minimum validation loss.
+`--steps` is a *total target step*, not an additional-step count; steps must be multiples of 100. The run expects matching prepared datasets, frozen-reference caches, and source hashes. Use `--resume PATH_TO_STEP_CHECKPOINT` only with a compatible checkpoint. This command is documented for reproducibility and **should not be run merely to inspect the repository**. Its output directory is intentionally separate from published `models/` weights and retained historical `archive/` checkpoints.
 
-### Evaluation
+**DPO evaluation**
 
-The evaluation script supports choosing the dataset, an optional adapter, and a prompt mode.
+The held-out test evaluator `scripts/dpo/evaluate_dpo_test.py` uses 400 test pairs, a cached frozen-reference split, the selected `models/dpo/best` adapter, and model/hash/metadata checks. Its full evaluation involves worker subprocesses and is not a lightweight smoke test. The complete invocation and regeneration of its test reference cache have **not** been verified from a clean clone. For the reproducible reported results, consult `results/dpo/test_metrics.json` and `docs/dpo_experiment_report.md` rather than claiming the test can be rerun with one dependency-free command.
 
-Example zero-shot evaluation:
+### Data and evaluation artifacts
 
-```bash
-python scripts/evaluate.py \
-  --data-file data/test.jsonl \
-  --output-name base
-```
+The Git repository intentionally excludes the local `data/` directory and `cache/` reference-log-probability files. To run training or reproduce the held-out DPO evaluation, the appropriate processed splits and reference cache must first be prepared. The relevant data-preparation and reference-cache scripts include (their CLI defaults and complete execution order have not yet been verified on a clean clone):
 
-Strong Prompt evaluation:
+- [`scripts/sft/prepare_data.py`](scripts/sft/prepare_data.py) and [`scripts/sft/prepare_balanced_data.py`](scripts/sft/prepare_balanced_data.py)
+- [`scripts/dpo/prepare_dpo_data.py`](scripts/dpo/prepare_dpo_data.py)
+- [`scripts/dpo/run_reference_batches.py`](scripts/dpo/run_reference_batches.py) and [`scripts/dpo/cache_dpo_reference_safe.py`](scripts/dpo/cache_dpo_reference_safe.py)
 
-```bash
-python scripts/evaluate.py \
-  --data-file data/test.jsonl \
-  --prompt-mode strong \
-  --output-name strong_prompt_test
-```
+The published metrics and reports can be inspected **without** downloading datasets or loading a model:
 
-Fine-tuned model evaluation, after placing the selected adapter and its configuration in `adapters_best/`:
+- [`results/sft/`](results/sft/) and [`docs/experiment_report.md`](docs/experiment_report.md)
+- [`results/dpo/test_metrics.json`](results/dpo/test_metrics.json)
+- [`results/dpo/checkpoint_metrics.json`](results/dpo/checkpoint_metrics.json)
+- [`results/dpo/generation_metrics.json`](results/dpo/generation_metrics.json)
+- [`results/dpo/generation_512_metrics.json`](results/dpo/generation_512_metrics.json)
+- [`docs/dpo_experiment_report.md`](docs/dpo_experiment_report.md)
 
-```bash
-python scripts/evaluate.py \
-  --adapter adapters_best \
-  --data-file data/test.jsonl \
-  --output-name original_lora_reproduction
-```
-
-Additional experiment scripts provide duplicate auditing, diagnostic dataset generation, resampling, and event-level analysis.
-
-Detailed metrics and aggregate confusion matrices are stored in `results/`. Model weights, generated datasets, and per-example outputs are not required for browsing the repository.
-
-## Project Status
-
-**Completed**
-
-- Qwen2.5 baseline and Strong Prompt evaluation
-- Response-only SFT with quantized-model LoRA
-- Class-aware resampling and second fine-tuning run
-- Exact duplicate and near-duplicate data audits
-- Minority-class diagnostic evaluation
-- Confusion matrix and error-transition analysis
-- Event-associated distribution-shift evaluation
-- Event-level subgroup analysis
-- Consolidated experimental report
-
-**Future Work**
-
-- Further reproducibility and repeated-seed experiments
-- Additional analysis of SFT loss masking and LoRA parameterization
-- Preference optimization with DPO on a suitable response-quality task
-
-DPO is a proposed extension and is not part of the completed experiments reported above.
+**Reproduction caveat:** The code was developed around local experiment artifacts and has undergone path, syntax, hash, and manifest checks after repository restructuring, but a complete clean-clone end-to-end reproduction has **not** yet been verified. Do not assume that all training/evaluation scripts run without additional setup or cached inputs.
 
 ## Limitations
 
-1. **Synthetic data:** Results are based on scenario-generated tickets from a fictional platform, not real customer-service workloads.
-2. **Limited independent minority examples:** Only 49 unique Critical examples were present in the original training split.
-3. **Heuristic duplicate screening:** Exact matching and character-level TF-IDF do not eliminate all semantic or template overlap.
-4. **Resampling confounding:** The class-aware intervention increased Critical exposure while reducing the diversity of other classes.
-5. **Single-run comparisons:** The fine-tuning results have not been replicated across multiple training seeds.
-6. **Evaluation reuse:** The standard test set was used during early error analysis and should be treated as a historical benchmark.
-7. **Distribution differences:** The diagnostic benchmark is class-balanced, and the event-shift benchmark is sampled by event group. Their aggregate scores are not directly comparable to the standard test distribution.
-8. **Scope of generalization:** Event-shift evaluation measures changes within the same synthetic data source, not real-world or cross-domain generalization.
+- Experiments use a relatively small, quantized 1.5B-parameter base model and laptop-scale compute.
+- Classification scores describe the project's evaluation setup and should not be generalized to other label schemes or datasets.
+- DPO's preference-based test metrics do not guarantee better response quality. The qualitative review identified lengthy responses, instruction-following errors, and generation-cap effects.
+- The released adapters do not include the original full base-model weights.
+- Processed training/evaluation data and historical checkpoints are not part of the Git repository.
 
 ## Documentation
 
-- [Full Experiment Report](docs/experiment_report.md)
-- [Label Schema](docs/label_schema.md)
+- [SFT experiment report](docs/experiment_report.md)
+- [DPO experiment report](docs/dpo_experiment_report.md)
+- [Classification label schema](docs/label_schema.md)
 
-## Dataset Attribution
+## Acknowledgments
 
-Marinovich, V. (2026). *Polaris Support Tickets — Synthetic Dataset (v2).*
-
-[Dataset on Hugging Face](https://huggingface.co/datasets/VladislavMarinovich/polaris-support-tickets-v2)
-
-Dataset license: CC BY-SA 4.0, as stated on the Hugging Face dataset card.
+This project builds upon the Qwen2.5-Instruct model, the MLX and MLX-LM frameworks, and the Polaris Support Tickets and Argilla UltraFeedback datasets. Thanks to the respective authors and open-source communities for making these resources publicly available.

@@ -1,0 +1,7 @@
+{
+  "samples": 11,
+  "sft_mean_tokens": 403.0,
+  "dpo_mean_tokens": 405.90909090909093,
+  "sft_hit_512": 5,
+  "dpo_hit_512": 4
+}

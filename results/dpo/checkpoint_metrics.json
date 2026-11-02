@@ -1,0 +1,82 @@
+[
+  {
+    "step": 100,
+    "val_loss": 0.5659132577872783,
+    "reward_accuracy": 0.79,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.35043106746673586,
+    "samples": 400
+  },
+  {
+    "step": 200,
+    "val_loss": 0.5229388194517035,
+    "reward_accuracy": 0.7625,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.5096875596046447,
+    "samples": 400
+  },
+  {
+    "step": 300,
+    "val_loss": 0.5066056004539609,
+    "reward_accuracy": 0.7775,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.6070399785041808,
+    "samples": 400
+  },
+  {
+    "step": 400,
+    "val_loss": 0.4971268744286979,
+    "reward_accuracy": 0.785,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.6991770873069758,
+    "samples": 400
+  },
+  {
+    "step": 500,
+    "val_loss": 0.49249835829247657,
+    "reward_accuracy": 0.7725,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.7570305900573735,
+    "samples": 400
+  },
+  {
+    "step": 600,
+    "val_loss": 0.487429062575911,
+    "reward_accuracy": 0.78,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.8191302547454836,
+    "samples": 400
+  },
+  {
+    "step": 700,
+    "val_loss": 0.48860920148859194,
+    "reward_accuracy": 0.78,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.8241914339065555,
+    "samples": 400
+  },
+  {
+    "step": 800,
+    "val_loss": 0.4762938407302075,
+    "reward_accuracy": 0.795,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.8879035992622377,
+    "samples": 400
+  },
+  {
+    "step": 900,
+    "val_loss": 0.468790371748045,
+    "reward_accuracy": 0.7975,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.9311019568443294,
+    "samples": 400
+  },
+  {
+    "step": 1000,
+    "val_loss": 0.46638579281952125,
+    "reward_accuracy": 0.7975,
+    "tie_rate": 0.0,
+    "mean_reward_margin": 0.9716585917472835,
+    "samples": 400
+  }
+]

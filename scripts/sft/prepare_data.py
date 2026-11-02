@@ -8,8 +8,8 @@ from datasets import load_dataset
 
 SEED = 42
 DATASET = "VladislavMarinovich/polaris-support-tickets-v2"
-ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "data"
+ROOT = Path(__file__).resolve().parents[2]
+OUT_DIR = ROOT / "data/sft/original"
 
 SIZES = {"train": 4000, "valid": 500, "test": 500}
 

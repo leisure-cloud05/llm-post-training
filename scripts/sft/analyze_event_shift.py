@@ -3,9 +3,9 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
-RESULTS = ROOT / "results"
+ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "data/sft/original"
+RESULTS = ROOT / "results/sft/sft"
 
 MODELS = {
     "base": "event_shift_base",
